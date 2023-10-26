@@ -51,7 +51,7 @@ def create_beds_grid(bed_frame):
 def create_main_screen():
     main_screen = tk.Tk()
     main_screen.title("Shelter Beds")
-    main_screen.geometry("800x400")  # Adjust the size as needed
+    main_screen.geometry("1200x400")  # Adjust the size as needed
 
     notebook = ttk.Notebook(main_screen)
     current_guests_tab = ttk.Frame(notebook)
