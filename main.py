@@ -9,7 +9,6 @@ conn = sqlite3.connect('shelter.db')
 
 cur = conn.cursor()
 
-
 conn.commit()
 
 # Sample user data (username and password)
