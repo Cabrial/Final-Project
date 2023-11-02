@@ -3,6 +3,14 @@ import ssl
 import tkinter as tk
 from email.message import EmailMessage
 from tkinter import ttk, messagebox
+import sqlite3
+
+conn = sqlite3.connect('shelter.db')
+
+cur = conn.cursor()
+
+
+conn.commit()
 
 # Sample user data (username and password)
 user_data = {
@@ -12,13 +20,30 @@ user_data = {
 
 bed_data = {f"Bed {i}": {"Guest Name": "", "Checkbox": None} for i in range(1, 25)}
 
+def fetch_guest_data():
+    cur.execute("SELECT * FROM guests")
+    data = cur.fetchall()
+    return data
+
+def populate_guests_tab(guests_tab):
+    guest_data = fetch_guest_data()
+
+    guest_listbox = tk.Listbox(guests_tab)
+    guest_listbox.pack(fill="both", expand=True)
+
+    for guest in guest_data:
+        guest_listbox.insert("end", f"Name: {guest[1]} {guest[2]}, Birth Date: {guest[3]}")
+
+    # Create a button to open the guest request form
+    request_button = tk.Button(guests_tab, text="Add a New Guest", command=request_user_creation)
+    request_button.pack()
+
 def login():
     username = username_entry.get()
     password = password_entry.get()
 
     if username in user_data and user_data[username] == password:
         messagebox.showinfo("Login Successful", "Welcome, " + username + "!")
-        # Close the login window
         window.destroy()
         create_main_screen()
     else:
@@ -47,11 +72,10 @@ def create_beds_grid(bed_frame):
             col = 0
             row += 2
 
-
 def create_main_screen():
     main_screen = tk.Tk()
     main_screen.title("Shelter Beds")
-    main_screen.geometry("800x400")  # Adjust the size as needed
+    main_screen.geometry("1200x400")
 
     notebook = ttk.Notebook(main_screen)
     current_guests_tab = ttk.Frame(notebook)
@@ -60,81 +84,77 @@ def create_main_screen():
     notebook.add(current_guests_tab, text="Current Guests")
     notebook.add(guests_tab, text="Guests")
 
-    # Place the notebook in the main window
     notebook.pack(expand=1, fill="both")
 
-    # Add content to the "Current Guests" tab
     current_guests_label = tk.Label(current_guests_tab, text="Current Guests")
     current_guests_label.pack()
 
-    # Create a frame for the beds grid
     bed_frame = tk.Frame(current_guests_tab)
     bed_frame.pack()
 
-    # Call the function to create the beds grid
     create_beds_grid(bed_frame)
+
+    populate_guests_tab(guests_tab)
 
     main_screen.mainloop()
 
-
 def request_user_creation():
+    def submit_request():
+        # Retrieve the input values
+        first_name = first_name_entry.get()
+        last_name = last_name_entry.get()
+        dob = dob_entry.get()
+
+        # You can process the captured data as needed (e.g., store in the database)
+        print("First Name:", first_name)
+        print("Last Name:", last_name)
+        print("DOB:", dob)
+
+        conn = sqlite3.connect('shelter.db')
+
+        cur = conn.cursor()
+
+        cur.execute("INSERT INTO guests (first_name, last_name, birth_date) VALUES (?, ?, ?)", (first_name, last_name, dob))
+
+        conn.commit()
+
+        # Close the request window
+        request_window.destroy()
+
     # Create a new window for the request
     request_window = tk.Tk()
     request_window.title("Request User Creation")
     request_window.geometry("300x200")
 
-    full_name_label = tk.Label(request_window, text="Full Name:")
-    full_name_label.pack()
-    full_name_entry = tk.Entry(request_window)
-    full_name_entry.pack()
+    # Label and Entry widgets for First Name
+    first_name_label = tk.Label(request_window, text="First Name:")
+    first_name_label.pack()
+    first_name_entry = tk.Entry(request_window)
+    first_name_entry.pack()
 
-    dob_label = tk.Label(request_window, text="Date of Birth:")
+    # Label and Entry widgets for Last Name
+    last_name_label = tk.Label(request_window, text="Last Name:")
+    last_name_label.pack()
+    last_name_entry = tk.Entry(request_window)
+    last_name_entry.pack()
+
+    # Label and Entry widgets for Date of Birth (DOB)
+    dob_label = tk.Label(request_window, text="Date of Birth (YYYY-MM-DD):")
     dob_label.pack()
     dob_entry = tk.Entry(request_window)
     dob_entry.pack()
 
-    def send_request():
-        port = 465  # For SSL
-        smtp_server = "smtp.gmail.com"
-        sender_email = "pedrocabrialca@gmail.com"  # Enter your address
-        receiver_email = "pedrocabrial@gmail.com"  # Enter receiver address
-        password = "okia bqft zuel tloe"
-
-        msg = EmailMessage()
-        msg.set_content(f"Full Name: {full_name_entry.get()}\nDate of Birth: {dob_entry.get()}")
-        msg['Subject'] = "New User Request!"
-        msg['From'] = sender_email
-        msg['To'] = receiver_email
-
-        context = ssl.create_default_context()
-
-        # Send the email using your SMTP server
-        try:
-            with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
-                server.login(sender_email, password)
-                server.send_message(msg, from_addr=sender_email, to_addrs=receiver_email)
-                messagebox.showinfo("Done", "Request sent!")
-                request_window.destroy()
-
-        except Exception as e:
-            print("Error:", str(e))
-            messagebox.showerror("Error", "Unable to send the request. Please try again later.")
-            request_window.destroy()
-
-    send_button = tk.Button(request_window, text="Send Request", command=send_request)
-    send_button.pack()
+    # Button to submit the request
+    submit_button = tk.Button(request_window, text="Submit", command=submit_request)
+    submit_button.pack()
 
     request_window.mainloop()
-
 
 # Create a new window for login
 window = tk.Tk()
 window.title("Login Interface")
-
-# Set the window size to 300x200 pixels (adjust as needed)
 window.geometry("300x200")
 
-# Create and place labels, entry fields, and buttons
 username_label = tk.Label(window, text="Username:")
 username_label.pack()
 username_entry = tk.Entry(window)
@@ -142,15 +162,13 @@ username_entry.pack()
 
 password_label = tk.Label(window, text="Password:")
 password_label.pack()
-password_entry = tk.Entry(window, show="*")  # Passwords should be hidden
+password_entry = tk.Entry(window, show="*")
 password_entry.pack()
 
 login_button = tk.Button(window, text="Login", command=login)
 login_button.pack()
 
-# Add a "Request Account" button
 request_button = tk.Button(window, text="Request Account", command=request_user_creation)
 request_button.pack()
 
-# Start the GUI event loop for the login window
 window.mainloop()
