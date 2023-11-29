@@ -110,14 +110,17 @@ def populate_guests_tab(guests_tab):
     for guest in guest_data:
         guest_listbox.insert("end", f"Name: {guest[1]} {guest[2]}, Birth Date: {guest[3]}")
 
-    assign_bed_button = tk.Button(guests_tab, text="Assign Bed", command=assign_bed)
-    assign_bed_button.pack()
+    button_frame = tk.Frame(guests_tab)
+    button_frame.pack(pady=10)
 
-    request_button = tk.Button(guests_tab, text="Add a New Guest", command=guest_creation)
-    request_button.pack()
+    assign_bed_button = tk.Button(button_frame, text="Assign Bed", command=assign_bed)
+    assign_bed_button.pack(side="left", padx=10)
 
-    suspension_button = tk.Button(guests_tab, text="Suspend Guest", command=suspend_guest)
-    suspension_button.pack()
+    request_button = tk.Button(button_frame, text="Add a New Guest", command=guest_creation)
+    request_button.pack(side="left", padx=10)
+
+    suspension_button = tk.Button(button_frame, text="Suspend Guest", command=suspend_guest)
+    suspension_button.pack(side="left", padx=10)
 
     create_beds_grid(guests_tab)
 
@@ -183,6 +186,13 @@ def update_current_guests_tab(bed_frame):
 
 def assign_bed_action(assign_bed_window, selected_guest, selected_bed):
     check_in_date = get_current_date()
+
+    cur.execute("SELECT * FROM booking WHERE bed_number = ? AND bed_number != 0", (selected_bed,))
+    existing_bed_assignments = cur.fetchall()
+
+    if existing_bed_assignments:
+        messagebox.showinfo("Bed Assignment", f"Bed {selected_bed} is already assigned to a guest.")
+        return
 
     cur.execute("""
             SELECT id
@@ -265,6 +275,8 @@ def unassign_bed_action(unassign_bed_window, selected_bed):
 
 
 def login():
+    global username_entry
+    global username
     username = username_entry.get()
     password = password_entry.get()
 
@@ -284,21 +296,39 @@ def create_beds_grid(bed_frame):
     col = 0
     total_beds = 24
 
+    checkboxes = []
+
     for bed_number in range(1, total_beds + 1):
         guest_data = fetch_guest_for_bed(bed_number)
+        checkbox_var = tk.IntVar()
 
         if guest_data:
             guest_name = f"{guest_data[1]} {guest_data[2]}"
+            checkbox = tk.Checkbutton(bed_frame, text=f"Bed {bed_number}: {guest_name}", variable=checkbox_var)
         else:
-            guest_name = "No guest assigned to this bed"
+            checkbox = tk.Checkbutton(bed_frame, text=f"Bed {bed_number}: No guest assigned", variable=checkbox_var)
 
-        bed_label = tk.Label(bed_frame, text=f"Bed {bed_number}: {guest_name}")
-        bed_label.grid(row=row, column=col, padx=15, pady=20)
+        checkbox.grid(row=row, column=col, padx=15, pady=10, sticky="w")
+        checkboxes.append((checkbox, checkbox_var))
 
         col += 1
         if col >= 4:
             col = 0
             row += 1
+
+
+    def clear_checked_checkboxes():
+        for checkbox, checkbox_var in checkboxes:
+            if checkbox_var.get() == 1:
+                checkbox.deselect()
+
+    clear_button = tk.Button(bed_frame, text="Clear Checked", command=clear_checked_checkboxes)
+    clear_button.grid(row=row, column=0, columnspan=1, pady=10, padx=15, sticky="ew")
+
+    return checkboxes
+
+
+
 
 
 def fetch_guest_for_bed(bed_number):
@@ -310,22 +340,92 @@ def fetch_guest_for_bed(bed_number):
     """, (bed_number,))
     return cur.fetchone()
 
+first_name_entry = None
+last_name_entry = None
+username_entry = None
+password_entry = None
+admin_var = None
 
 def create_main_screen():
     global bed_frame
     global suspensions_frame
+    global first_name_entry, last_name_entry, username_entry, password_entry, admin_var
     main_screen = tk.Tk()
     main_screen.title("Shelter Beds")
-    main_screen.geometry("940x700")
+    main_screen.geometry("840x700")
 
     notebook = ttk.Notebook(main_screen)
     current_guests_tab = ttk.Frame(notebook)
     guests_tab = ttk.Frame(notebook)
     suspensions_tab = ttk.Frame(notebook)
 
+    is_admin = fetch_user_admin_status(username)
+
+    def check_existing_user(first_name, last_name):
+
+        query = "SELECT id FROM guests WHERE first_name = ? AND last_name = ?"
+
+        cursor.execute(query, (first_name, last_name))
+        result = cursor.fetchone()
+
+        return result is not None
+
+    def add_new_user():
+        global first_name_entry, last_name_entry, username_entry, password_entry, admin_var
+
+        new_first_name = first_name_entry.get()
+        new_last_name = last_name_entry.get()
+        new_username = username_entry.get()
+        new_password = password_entry.get()
+        is_admin_value = admin_var.get()
+
+        success = add_user_to_db(new_first_name, new_last_name, new_username, new_password, is_admin_value)
+
+        if success:
+            messagebox.showinfo("Success", "User created successfully!")
+
+            first_name_entry.delete(0, tk.END)
+            last_name_entry.delete(0, tk.END)
+            username_entry.delete(0, tk.END)
+            password_entry.delete(0, tk.END)
+            admin_var.set(0)
+
+
+    if is_admin == 1:
+        admin_tab = ttk.Frame(notebook)
+        notebook.add(admin_tab, text="Admin")
+        first_name_label = tk.Label(admin_tab, text="First Name:")
+        first_name_label.pack()
+        first_name_entry = tk.Entry(admin_tab)
+        first_name_entry.pack()
+
+        last_name_label = tk.Label(admin_tab, text="Last Name:")
+        last_name_label.pack()
+        last_name_entry = tk.Entry(admin_tab)
+        last_name_entry.pack()
+
+        username_label = tk.Label(admin_tab, text="Username:")
+        username_label.pack()
+        username_entry = tk.Entry(admin_tab)
+        username_entry.pack()
+
+        password_label = tk.Label(admin_tab, text="Password:")
+        password_label.pack()
+        password_entry = tk.Entry(admin_tab, show="*")
+        password_entry.pack()
+
+        admin_var = tk.IntVar()
+        admin_checkbox = tk.Checkbutton(admin_tab, text="Admin", variable=admin_var)
+        admin_checkbox.pack()
+
+        add_user_button = tk.Button(admin_tab, text="Add User", command=add_new_user)
+        add_user_button.pack()
+
+
     notebook.add(current_guests_tab, text="Current Guests")
     notebook.add(guests_tab, text="Guests")
     notebook.add(suspensions_tab, text="Suspensions")
+
 
     start_timer()
 
@@ -362,16 +462,74 @@ def create_main_screen():
 
     main_screen.mainloop()
 
+def add_user_to_db(first_name, last_name, username, password, is_admin):
+
+    conn = sqlite3.connect('shelter.db')
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM users WHERE username=?", (username,))
+    existing_user = cur.fetchone()
+
+    if existing_user:
+
+        messagebox.showerror("Error", "Username already exists. Please choose another username.")
+        return False
+
+
+    cur.execute("""
+            INSERT INTO users (first_name, last_name, username, password, is_admin)
+            VALUES (?, ?, ?, ?, ?)
+        """, (first_name, last_name, username, password, is_admin))
+
+
+    conn.commit()
+    conn.close()
+
+    messagebox.showinfo("Success", "User created successfully!")
+
+    first_name_entry.delete(0, tk.END)
+    last_name_entry.delete(0, tk.END)
+    username_entry.delete(0, tk.END)
+    password_entry.delete(0, tk.END)
+    admin_var.set(0)
+
+
+def fetch_user_admin_status(username):
+
+    cur.execute("SELECT is_admin FROM users WHERE username=?", (username,))
+    admin_status = cur.fetchone()
+    return admin_status[0] if admin_status else 0
+
+
 
 def suspend_guest():
     selected_index = guest_listbox.curselection()
 
     if selected_index:
-        selected_guest = fetch_guest_data()[selected_index[0]]
-        selected_bed = fetch_bed_for_guest(selected_guest)
-        suspend_guest_dialog(selected_guest, selected_bed)
+
+        search_query = guest_listbox.get(selected_index[0])
+        search_query_parts = search_query.split(", Birth Date:")
+        search_name_parts = search_query_parts[0].split(": ")[1].split(" ")
+        search_first_name = search_name_parts[0]
+        search_last_name = search_name_parts[1]
+
+        cur.execute("""
+            SELECT guests.id, guests.first_name, guests.last_name, guests.birth_date,
+                   booking.bed_number, booking.check_in_date, booking.check_out_date
+            FROM guests
+            LEFT JOIN booking ON guests.id = booking.guest_id
+            WHERE guests.first_name = ? AND guests.last_name = ?
+        """, (search_first_name, search_last_name))
+
+        selected_guest = cur.fetchone()
+        if selected_guest:
+            selected_bed = fetch_bed_for_guest(selected_guest)
+            suspend_guest_dialog(selected_guest, selected_bed)
+        else:
+            messagebox.showinfo("Suspension", "Selected guest details not found.")
     else:
         messagebox.showinfo("Suspension", "Please select a guest before suspending.")
+
 
 
 def fetch_bed_for_guest(selected_guest):
